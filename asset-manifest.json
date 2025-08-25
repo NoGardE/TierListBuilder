@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/TierListBuilder/static/css/main.e6c13ad2.css",
+    "main.js": "/TierListBuilder/static/js/main.eb781451.js",
+    "static/js/453.7cd2e64d.chunk.js": "/TierListBuilder/static/js/453.7cd2e64d.chunk.js",
+    "index.html": "/TierListBuilder/index.html",
+    "main.e6c13ad2.css.map": "/TierListBuilder/static/css/main.e6c13ad2.css.map",
+    "main.eb781451.js.map": "/TierListBuilder/static/js/main.eb781451.js.map",
+    "453.7cd2e64d.chunk.js.map": "/TierListBuilder/static/js/453.7cd2e64d.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.eb781451.js"
+  ]
+}
