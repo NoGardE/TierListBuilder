@@ -1,18 +1,16 @@
-import React, { useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import React, { useState, useEffect } from 'react';
+import { Node, Tree } from './Tree';
 
 const App = () => {
   const [items, setItems] = useState([]);
   const [setA, setSetA] = useState([]);
-  const [setB, setSetB] = useState([]);
+  const [tree, setTree] = useState(new Tree());
   const [currentX, setCurrentX] = useState(null);
-  const [low, setLow] = useState(0);
-  const [high, setHigh] = useState(0);
   const [stage, setStage] = useState('input'); // input, compare, sorted, tiering, final
-  const [tiers, setTiers] = useState([]);
+  const [tiers, setTiers] = useState([]); // [{ afterIndex, label }]
   const [firstTierLabel, setFirstTierLabel] = useState('');
-  const [comparisonHistory, setComparisonHistory] = useState({}); // Tracks comparisons: { "item1:item2": "item1" }
 
+  // Shuffle array for randomization
   const shuffle = (array) => {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -22,168 +20,179 @@ const App = () => {
     return newArray;
   };
 
+  // Start sorting with first item as root
   const startSorting = () => {
     const newSetA = shuffle(items);
-    setSetA(newSetA);
-    setSetB([newSetA[0]]);
-    setSetA(newSetA.slice(1));
-    setStage('compare');
-    setCurrentX(newSetA[1]);
-    setLow(0);
-    setHigh(0);
-    console.log('After initialization - Set A:', newSetA.slice(1), 'Set B:', [newSetA[0]]);
-  };
-
-  const performComparison = () => {
-    if (setA.length === 0 && !currentX) {
-      setStage('sorted');
-      console.log('Sorting complete - Set A:', [], 'Set B:', setB);
+    console.log('startSorting - Initial items:', items);
+    console.log('Randomized Set A:', newSetA);
+    if (newSetA.length < 2) {
+      if (newSetA.length === 1) {
+        const newTree = new Tree();
+        newTree.insert(newSetA[0]);
+        newTree.inorder();
+        setTree(newTree);
+        setSetA([]);
+        setStage('sorted');
+        console.log('Single item, sorted - Set A:', [], 'Sorted List:', newTree.getSorted());
+      } else {
+        setStage('sorted');
+        console.log('Empty list, sorted - Set A:', []);
+      }
       return;
     }
-    if (!currentX) {
-      setCurrentX(setA[0]);
+    const first = newSetA.shift();
+    const newTree = new Tree();
+    newTree.insert(first);
+    newTree.inorder();
+    if (!newTree.root) {
+      console.error('Failed to initialize tree root with:', first);
+      return;
+    }
+    const nextItem = newSetA.length > 0 ? newSetA[0] : null;
+    setTree(newTree);
+    setSetA(newSetA.slice(1));
+    setCurrentX(nextItem);
+    setStage('compare');
+    console.log('After initialization - Set A:', newSetA.slice(1), 'Root:', first, 'currentX:', nextItem, 'sortedList:', newTree.getSorted());
+  };
+
+  // Proceed to next comparison or sorted stage
+  const performComparison = () => {
+    console.log('performComparison - setA:', setA, 'currentX:', currentX, 'sortedList:', tree.getSorted());
+    if (setA.length === 0 && !currentX) {
+      setStage('sorted');
+      console.log('Sorting complete - Set A:', [], 'Sorted List:', tree.getSorted());
+      return;
+    }
+    if (!currentX && setA.length > 0) {
+      const nextItem = setA[0];
+      setCurrentX(nextItem);
       setSetA(setA.slice(1));
-      setLow(0);
-      setHigh(setB.length - 1);
-      console.log('Next item to compare:', setA[0], 'Set A:', setA.slice(1), 'Set B:', setB);
+      console.log('Next item to compare:', nextItem, 'Set A:', setA.slice(1), 'Sorted List:', tree.getSorted());
     }
   };
 
-  const choose = (chosen) => {
-    const mid = Math.floor((low + high) / 2);
-    const xBetter = chosen === currentX;
-    console.log(`Better? ${xBetter}. Chosen = ${chosen}, current = ${currentX}.`)
-    const done = high <= low
-      || (mid === 0 && !xBetter)
-      || (mid === setB.length - 1 && xBetter)
-      
- 
-    // Record comparison in history
-    const pairKey = [currentX, setB[mid]].sort().join(':');
-    setComparisonHistory((prev) => ({
-      ...prev,
-      [pairKey]: chosen,
-    }));
+  // Handle user comparison choice
+  const choose = (num) => {
+    console.log('choose called with num:', num, 'currentX:', currentX, 'sortedList:', tree.getSorted());
+    if (!currentX || !tree.root) {
+      console.error('Invalid state in choose, resetting');
+      performComparison();
+      return;
+    }
+    const midValue = tree.root.value; // Use root for comparison
+    if (!midValue) {
+      console.error('Root node is invalid, resetting');
+      performComparison();
+      return;
+    }
+    const chosen = num === 1 ? option1 : option2;
+    const notChosen = num === 1 ? option2 : option1;
+    console.log(`User chose "${chosen}" over "${notChosen}"`);
 
-    if (done)
-    {
-      // We have the place to put it for sure
-        const newSetB = [...setB];
-        if (xBetter)
-        {
-          newSetB.splice(high + 1, 0, currentX)
-        }
-        else
-        {
-          newSetB.splice(low, 0, currentX)
-        }
-        setSetB(newSetB);
-        setCurrentX(setA[1]);
-        const finished = setA.length <= 1
-        setSetA(setA.length === 1 ? [] : setA.slice(1))
-        console.log(`Inserted "${currentX}" at position ${xBetter ? high : low} in Set B`);
-        console.log('Current state - Set A:', setA, 'Set B:', newSetB);
-        setLow(0);
-        setHigh(newSetB.length - 1);
-        if (finished)
-        {
-          startTiering()
-        }
+    const xBetter = chosen === currentX;
+    const direction = xBetter ? 'left' : 'right';
+    let currentNode = tree.root;
+    let parent = null;
+    if (currentNode[direction]) {
+      parent = currentNode;
+      currentNode = currentNode[direction];
     }
     else
     {
-      if (xBetter) {
-        setLow(mid + 1);
-        console.log(`Better. High is now ${high}, low is ${mid + 1}. Length ${setB.length}`)
-      } else {
-        setHigh(mid - 1);
-        console.log(`Worse. High is now ${mid - 1}, low is ${low}. Length ${setB.length}`)
+      if (parent) {
+        parent[direction] = new Node(currentX);
+        parent[direction].parent = parent;
+        tree.balance();
+        tree.inorder();
+        if (!tree.root) {
+          console.error('Tree root lost after balancing');
+          return;
+        }
       }
     }
-    performComparison();
+    const newSetA = [...setA];
+    const nextItem = newSetA.length > 0 ? newSetA.shift() : null;
+    setCurrentX(nextItem);
+    setSetA(newSetA);
+    console.log('Inserted node, preparing next - currentX:', nextItem, 'setA:', newSetA, 'sortedList:', tree.getSorted());
   };
 
   const startTiering = () => {
     setStage('tiering');
-    setTiers([{ label: firstTierLabel, items: [], divider: true }]);
-    setSetB(setB.reverse())
-    console.log('Starting tiering - Sorted Set B:', setB, 'Initial tiers:', [{ label: firstTierLabel, items: [], divider: true }]);
+    setTiers([{ afterIndex: -1, label: firstTierLabel }]);
+    console.log('Starting tiering - Sorted List:', tree.getSorted(), 'Initial tiers:', [{ afterIndex: -1, label: firstTierLabel }]);
   };
 
   const addDividerAfter = (index) => {
-    const newTiers = [...tiers];
-    newTiers.splice(index + 1, 0, { label: '', items: [], divider: true });
+    const newTiers = [...tiers, { afterIndex: index, label: '' }];
     setTiers(newTiers);
     console.log(`Added divider after item at index ${index}`, 'Tiers:', newTiers);
   };
 
-  const removeDivider = (index) => {
-    const newTiers = [...tiers];
-    newTiers.splice(index, 1);
+  const removeDivider = (afterIndex) => {
+    const newTiers = tiers.filter((tier) => tier.afterIndex !== afterIndex);
     setTiers(newTiers);
-    console.log(`Removed divider at index ${index}`, 'Tiers:', newTiers);
+    console.log(`Removed divider at afterIndex ${afterIndex}`, 'Tiers:', newTiers);
   };
 
-  const updateTierLabel = (index, value) => {
-    const newTiers = [...tiers];
-    newTiers[index].label = value;
+  const updateTierLabel = (afterIndex, value) => {
+    const newTiers = tiers.map((tier) =>
+      tier.afterIndex === afterIndex ? { ...tier, label: value } : tier
+    );
     setTiers(newTiers);
-    console.log(`Updated tier label at index ${index} to "${value}"`, 'Tiers:', newTiers);
+    console.log(`Updated tier label at afterIndex ${afterIndex} to "${value}"`, 'Tiers:', newTiers);
   };
 
   const finishTiering = () => {
-    let currentItems = [];
-    const finalTiers = [];
-    let currentLabel = firstTierLabel;
-    let itemIndex = 0;
-
-    tiers.forEach((tier, index) => {
-      while (itemIndex < setB.length && (index === tiers.length - 1 || currentItems.length < setB.length / tiers.length)) {
-        currentItems.push(setB[itemIndex]);
-        itemIndex++;
-      }
-      finalTiers.push({ label: currentLabel, items: [...currentItems] });
-      currentLabel = tier.label;
-      currentItems = [];
-    });
-
-    if (itemIndex < setB.length) {
-      while (itemIndex < setB.length) {
-        currentItems.push(setB[itemIndex]);
-        itemIndex++;
-      }
-      finalTiers.push({ label: currentLabel, items: [...currentItems] });
-    }
-
+    const sortedList = tree.getSorted();
+    const sortedTiers = [...tiers].sort((a, b) => a.afterIndex - b.afterIndex);
+    const dividerPositions = sortedTiers.map((d) => d.afterIndex);
+    const starts = [0, ...dividerPositions.map((p) => p + 1)];
+    const ends = [...dividerPositions.map((p) => p + 1), sortedList.length];
+    const labels = [firstTierLabel, ...sortedTiers.map((d) => d.label)];
+    const finalTiers = labels
+      .map((label, i) => ({
+        label: label || 'Unnamed Tier',
+        items: sortedList.slice(starts[i], ends[i]),
+      }))
+      .filter((t) => t.items.length > 0);
     setTiers(finalTiers);
     setStage('final');
     console.log('Final tiers created:', finalTiers);
   };
 
-  let option1, option2;
-  if (currentX && stage === 'compare') {
-    let mid = Math.floor((low + high) / 2);
-    
-    // Check if this pair has been compared before
-    let pairKey = [currentX, setB[mid]].sort().join(':');
-    while (comparisonHistory[pairKey] && low < high) {
-      const previousWinner = comparisonHistory[pairKey];
-      const xBetter = previousWinner === currentX;
-      console.log(`Skipping comparison for "${currentX}" vs "${setB[mid]}" (already compared, winner: "${previousWinner}")`);
-      if (xBetter) {
-        setLow(mid + 1);
-      } else {
-        setHigh(mid);
-      }
-      mid = Math.floor((low + high) / 2);
-      pairKey = [currentX, setB[mid]].sort().join(':');
-    }
+  // Debug state changes
+  useEffect(() => {
+    console.log('State updated - stage:', stage, 'currentX:', currentX, 'sortedList:', tree.getSorted());
+  }, [stage, currentX, tree]);
 
-    const isSwapped = Math.random() < 0.5;
-    console.log('Current state - Set A:', setA, 'Set B:', setB);
-    option1 = isSwapped ? setB[mid] : currentX;
-    option2 = isSwapped ? currentX : setB[mid];
-    console.log(`Comparing "${option1}" vs "${option2}. High is now ${high}, low is ${low}. Length ${setB.length}"`);
+  let option1 = null, option2 = null;
+  if (currentX && stage === 'compare' && tree.root) {
+    console.log('Entering comparison block - currentX:', currentX, 'sortedList:', tree.getSorted());
+    const midValue = tree.root.value;
+    if (midValue) {
+      const isSwapped = Math.random() < 0.5;
+      option1 = isSwapped ? midValue : currentX;
+      option2 = isSwapped ? currentX : midValue;
+      console.log(`Comparing "${option1}" vs "${option2}"`);
+    } else {
+      console.error('Invalid root value in comparison block, resetting');
+      const newSetA = [...setA];
+      const nextItem = newSetA.length > 0 ? newSetA.shift() : null;
+      setCurrentX(nextItem);
+      setSetA(newSetA);
+      console.log('Reset comparison - currentX:', nextItem, 'setA:', newSetA);
+    }
+  } else {
+    console.log('Comparison block skipped - currentX:', currentX, 'stage:', stage, 'sortedList:', tree.getSorted());
+    if (stage === 'compare' && !currentX && setA.length > 0) {
+      const newSetA = [...setA];
+      const nextItem = newSetA.length > 0 ? newSetA.shift() : null;
+      setCurrentX(nextItem);
+      setSetA(newSetA);
+      console.log('Forced next comparison - currentX:', nextItem, 'setA:', newSetA);
+    }
   }
 
   return (
@@ -203,13 +212,13 @@ const App = () => {
         </div>
       )}
 
-      {stage === 'compare' && (
+      {stage === 'compare' && option1 && option2 && (
         <div>
           <h2>Which is better?</h2>
           <p>1: {option1}</p>
           <p>2: {option2}</p>
-          <button onClick={() => choose(option1)}>{option1}</button>
-          <button onClick={() => choose(option2)}>{option2}</button>
+          <button onClick={() => choose(1)}>{option1}</button>
+          <button onClick={() => choose(2)}>{option2}</button>
         </div>
       )}
 
@@ -217,7 +226,7 @@ const App = () => {
         <div>
           <h2>Sorted List (Best to Worst)</h2>
           <ul>
-            {setB.map((item, index) => (
+            {tree.getSorted().map((item, index) => (
               <li key={index}>{item}</li>
             ))}
           </ul>
@@ -238,19 +247,19 @@ const App = () => {
             />
           </label>
           <ul>
-            {setB.map((item, index) => (
+            {tree.getSorted().map((item, index) => (
               <li key={index}>
                 <span>{item}</span>
-                {index < setB.length - 1 && (
+                {index < tree.getSorted().length - 1 && (
                   <button onClick={() => addDividerAfter(index)}>Add Divider After</button>
                 )}
-                {tiers[index] && tiers[index].divider && (
+                {tiers.find((tier) => tier.afterIndex === index) && (
                   <div style={{ backgroundColor: '#f0f0f0', padding: '10px' }}>
                     <hr />
                     <input
                       type="text"
                       placeholder="Next Tier Label (e.g. A)"
-                      value={tiers[index].label}
+                      value={tiers.find((tier) => tier.afterIndex === index).label}
                       onChange={(e) => updateTierLabel(index, e.target.value)}
                     />
                     <button onClick={() => removeDivider(index)}>Remove Divider</button>
@@ -268,7 +277,7 @@ const App = () => {
           <h2>Final Tier List</h2>
           {tiers.map((tier, index) => (
             <div key={index}>
-              <h3>{tier.label || 'Unnamed Tier'}</h3>
+              <h3>{tier.label}</h3>
               <ul style={{ display: 'flex', flexWrap: 'wrap', padding: 0 }}>
                 {tier.items.map((item, i) => (
                   <li key={i} style={{ margin: '0 10px' }}>
@@ -283,8 +292,5 @@ const App = () => {
     </div>
   );
 };
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
 
 export default App;
